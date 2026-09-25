@@ -53,6 +53,7 @@ is not deterministic, so sphere counts vary slightly between builds.
 
 | Script | What it shows |
 | --- | --- |
+| `view_soma_arm.py` | Browser viewer at `localhost:8080`: live replay with a draggable box, collision spheres, joint sliders |
 | `check_kinematics.py` | T-pose FK matches SOMA within 0.001 mm with identity link rotations |
 | `check_self_collision.py` | Closest arm-to-body pairs at test poses |
 | `bench_soma_retarget.py` | `MotionRetargeter.solve_frame` on this robot, with a box on the hand path (`--mpc` for MPC mode) |
