@@ -39,7 +39,8 @@ def main(use_mpc: bool = False):
     box = {"cuboid": {"box": {"dims": [0.1, 0.1, 0.1], "pose": [5.0, 0.0, 0.0, 1, 0, 0, 0]}}}
     rt = MotionRetargeter(MotionRetargeterCfg.create(
         robot=CFG, tool_pose_criteria=criteria(), num_envs=1, scene_model=box,
-        local_ik_num_iters=20, use_mpc=use_mpc, steps_per_target=STEPS))
+        local_ik_num_iters=20, use_mpc=use_mpc, steps_per_target=STEPS,
+        collision_activation_distance=float(os.environ.get("ACT", "0.01"))))
     names = rt.joint_names
     # A reach: both arms go from a 15 deg hang to forward-up and back, elbows bending.
     s = torch.linspace(0, 1, N, device="cuda:0").view(-1, 1)

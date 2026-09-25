@@ -69,7 +69,9 @@ Results on the synthetic 300-frame reach (`local_ik_num_iters=20`):
 
 Every mode keeps the hand clear of the box. None of them curves around it early
 enough: the hand is held behind the box while the recorded target passes through it.
-That needs a cost change, not a solver setting (step 4).
+That needs a cost change, not a solver setting (step 4). A larger collision activation
+distance does not help either: at 5, 10 and 15 cm the worst lag grows to 56, 58 and 62 cm
+(set `ACT=<metres>` when running `bench_soma_retarget.py`).
 
 ## Known gaps
 
