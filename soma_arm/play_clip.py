@@ -219,7 +219,7 @@ def main() -> None:
     gui_act = server.gui.add_dropdown("Action", acts, initial_value="drink" if "drink" in acts else acts[0])
     gui_clip = server.gui.add_dropdown("Clip", tuple(index[first][gui_act.value]))
     gui_var = server.gui.add_dropdown("Hands", tuple(VARIANTS), initial_value="GRIP")
-    gui_avoid = server.gui.add_checkbox("cuRobo avoid", False)
+    gui_avoid = server.gui.add_checkbox("cuRobo avoid", True)
     gui_edit = server.gui.add_markdown("")
     gui_play = server.gui.add_checkbox("Play", True)
     gui_loop = server.gui.add_checkbox("Loop", True)
@@ -235,6 +235,7 @@ def main() -> None:
         gui_sy = server.gui.add_slider("Scale Y", 0.3, 2.5, 0.05, 1.0)
         gui_sz = server.gui.add_slider("Scale Z", 0.3, 2.5, 0.05, 1.0)
         gui_reset = server.gui.add_button("Place around the object")
+    gui_focus = server.gui.add_button("Focus camera on object")
     gui_info = server.gui.add_markdown("")
     gui_hits = server.gui.add_markdown("")
 
@@ -277,6 +278,24 @@ def main() -> None:
         state["obs"] = True
 
     gui_obs.on_update(lambda _: place_default())
+
+    def focus_camera(clients=None) -> None:
+        """Aim the camera at the object's start spot, from behind the person's right shoulder."""
+        if clip is None:
+            return
+        target = clip.obj_p[0]
+        fwd = target[:2] - clip.P[0, 1][:2]                   # person (hips) -> object
+        fwd = fwd / max(np.linalg.norm(fwd), 1e-6)
+        right = np.array([fwd[1], -fwd[0]])
+        side = right * 0.8 - fwd * 0.9                         # back-right of the person, 45 degrees
+        eye = target + np.array([side[0], side[1], 0.7])
+        for c in (clients or server.get_clients().values()):
+            c.camera.up_direction = (0.0, 0.0, 1.0)
+            c.camera.position = tuple(eye)
+            c.camera.look_at = tuple(target)
+
+    server.on_client_connect(lambda c: focus_camera([c]))
+    gui_focus.on_click(lambda _: focus_camera())
     gui_reset.on_click(lambda _: place_default())
 
     def rebuild_obstacle() -> None:
@@ -394,6 +413,7 @@ def main() -> None:
             if gui_obs.value != "none":
                 place_default()
             gui_frame.max = clip.frames - 1
+            focus_camera()
             frame = 0
             gui_info.content = f"`{clip.name}` · {clip.frames} frames at {clip.fps} fps ({clip.frames / clip.fps:.1f} s)"
         if gui_play.value:
