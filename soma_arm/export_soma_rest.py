@@ -9,6 +9,8 @@ frame (right-handed, Z up, metres):
 - ``t_pos`` (J, 3), ``t_rot`` (J, 3, 3): bone world pose in the T-pose.
 - ``verts`` (V, 3), ``faces`` (F, 3): T-pose body mesh.
 - ``vert_bone`` (V,): index of each vertex's dominant skinning bone.
+- ``skin_idx`` (V, 4), ``skin_w`` (V, 4): the four strongest skinning bones per vertex and
+  their weights (renormalised), for smooth linear-blend skinning in viewers.
 
 SOMA's own T-pose frame is right-handed Y up. ``tools/convert_grip_to_unity.py``
 maps it to Unity with ``A`` and GRAB to Unity with ``M``, so SOMA -> GRAB is
@@ -61,8 +63,12 @@ def main() -> None:
     t_pos = world[:, :3, 3] @ SOMA_TO_ZUP.T
     t_rot = SOMA_TO_ZUP[None] @ world[:, :3, :3] @ SOMA_TO_ZUP.T[None]
     verts = verts @ SOMA_TO_ZUP.T
+    top = np.argsort(-weights, axis=1)[:, :4]
+    w4 = np.take_along_axis(weights, top, axis=1)
+    w4 = w4 / np.clip(w4.sum(axis=1, keepdims=True), 1e-8, None)
     np.savez(args.out, names=np.array(names), parents=parents, t_pos=t_pos, t_rot=t_rot,
-             verts=verts, faces=faces, vert_bone=weights.argmax(axis=1))
+             verts=verts, faces=faces, vert_bone=weights.argmax(axis=1),
+             skin_idx=top.astype(np.int32), skin_w=w4.astype(np.float32))
 
     head, hips = t_pos[names.index("Head")], t_pos[names.index("Hips")]
     print(f"{len(names)} bones, {len(verts)} verts -> {args.out}")

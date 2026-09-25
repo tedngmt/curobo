@@ -1,0 +1,17 @@
+<robot name="soma_right_arm">
+  <link name="base_link"/>
+  <link name="Arm_p"/>
+  <link name="Arm_r"/>
+  <link name="RightArm"><visual><geometry><mesh filename="meshes/RightArm.obj"/></geometry></visual><collision><geometry><mesh filename="meshes/RightArm.obj"/></geometry></collision></link>
+  <link name="ForeArm_e"/>
+  <link name="RightForeArm"><visual><geometry><mesh filename="meshes/RightForeArm.obj"/></geometry></visual><collision><geometry><mesh filename="meshes/RightForeArm.obj"/></geometry></collision></link>
+  <link name="Hand_f"/>
+  <link name="RightHand"><visual><geometry><mesh filename="meshes/RightHand.obj"/></geometry></visual><collision><geometry><mesh filename="meshes/RightHand.obj"/></geometry></collision></link>
+  <joint name="shoulder_pitch" type="revolute"><parent link="base_link"/><child link="Arm_p"/><origin xyz="0.000000 0.000000 0.333000" rpy="0.000000 1.570796 0.000000"/><axis xyz="0.000000 0.000000 -1.000000"/><limit lower="-3.1" upper="3.1" effort="100" velocity="6.0"/></joint>
+  <joint name="shoulder_roll" type="revolute"><parent link="Arm_p"/><child link="Arm_r"/><origin xyz="0.000000 0.000000 0.000000" rpy="0.000000 0.000000 0.000000"/><axis xyz="0.000000 1.000000 0.000000"/><limit lower="-3.1" upper="3.1" effort="100" velocity="6.0"/></joint>
+  <joint name="shoulder_yaw" type="revolute"><parent link="Arm_r"/><child link="RightArm"/><origin xyz="0.000000 0.000000 0.000000" rpy="0.000000 0.000000 0.000000"/><axis xyz="-1.000000 0.000000 0.000000"/><limit lower="-1.6" upper="1.6" effort="100" velocity="6.0"/></joint>
+  <joint name="elbow" type="revolute"><parent link="RightArm"/><child link="ForeArm_e"/><origin xyz="-0.411040 0.000000 0.000000" rpy="0.000000 0.000000 0.000000"/><axis xyz="0.000000 0.000000 1.000000"/><limit lower="0.0" upper="2.6" effort="100" velocity="6.0"/></joint>
+  <joint name="forearm_twist" type="revolute"><parent link="ForeArm_e"/><child link="RightForeArm"/><origin xyz="0.000000 0.000000 0.000000" rpy="0.000000 0.000000 0.000000"/><axis xyz="-1.000000 0.000000 0.000000"/><limit lower="-1.6" upper="1.6" effort="100" velocity="6.0"/></joint>
+  <joint name="wrist_flex" type="revolute"><parent link="RightForeArm"/><child link="Hand_f"/><origin xyz="-0.372912 0.000000 -0.000000" rpy="0.000000 0.000000 0.000000"/><axis xyz="0.000000 -1.000000 0.000000"/><limit lower="-1.2" upper="1.2" effort="100" velocity="6.0"/></joint>
+  <joint name="wrist_dev" type="revolute"><parent link="Hand_f"/><child link="RightHand"/><origin xyz="0.000000 0.000000 0.000000" rpy="0.000000 0.000000 0.000000"/><axis xyz="0.000000 0.000000 1.000000"/><limit lower="-0.6" upper="0.6" effort="100" velocity="6.0"/></joint>
+</robot>

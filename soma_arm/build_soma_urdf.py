@@ -56,6 +56,10 @@ LIMITS = {
     "forearm_twist": (-1.6, 1.6),
     "wrist_flex": (-1.2, 1.2),
     "wrist_dev": (-0.6, 0.6),
+    # Waist (``--waist``): + pitch leans forward, roll bends sideways, yaw twists.
+    "waist_pitch": (-0.25, 0.9),
+    "waist_roll": (-0.35, 0.35),
+    "waist_yaw": (-0.7, 0.7),
 }
 
 
@@ -80,12 +84,14 @@ class Urdf:
     def __init__(self, name: str):
         self.lines = [f'<robot name="{name}">']
 
-    def link(self, name: str, mesh: str | None = None):
+    def link(self, name: str, mesh: str | None = None, visual: str | None = None):
+        """A link; ``visual`` overrides the displayed mesh (``mesh`` stays the collision)."""
         if mesh is None:
             self.lines.append(f'  <link name="{name}"/>')
             return
         geom = f'<geometry><mesh filename="{mesh}"/></geometry>'
-        self.lines.append(f'  <link name="{name}"><visual>{geom}</visual>'
+        vis = f'<geometry><mesh filename="{visual or mesh}"/></geometry>'
+        self.lines.append(f'  <link name="{name}"><visual>{vis}</visual>'
                           f'<collision>{geom}</collision></link>')
 
     def joint(self, name, parent, child, xyz=(0, 0, 0), rpy=(0, 0, 0), axis=None, limit=None):
@@ -110,7 +116,9 @@ def write_meshes(rest, groups: dict[str, list[str]], origins: dict[str, np.ndarr
     mesh_dir.mkdir(parents=True, exist_ok=True)
     for link, bones in groups.items():
         mask = np.isin(owner, bones)
-        keep = mask[faces].all(axis=1)
+        # Any-vertex, not all-vertex: triangles straddling two bones go to both links, so
+        # neighbouring links overlap at the joint instead of leaving a gap.
+        keep = mask[faces].any(axis=1)
         if not keep.any():
             raise SystemExit(f"no faces for link {link} from bones {bones}")
         m = trimesh.Trimesh(verts - origins[link], faces[keep], process=True)
@@ -118,7 +126,14 @@ def write_meshes(rest, groups: dict[str, list[str]], origins: dict[str, np.ndarr
         m.export(mesh_dir / f"{link}.obj")
 
 
-def build_urdf(rest, out_dir: Path) -> tuple[Path, list[str], dict[str, float]]:
+def build_urdf(rest, out_dir: Path, palm_visual: bool = False,
+               waist: bool = False) -> tuple[Path, list[str], dict[str, float]]:
+    """``palm_visual``: the right hand displays only the palm (its fingers are drawn
+    separately); its collision mesh stays the whole open hand.
+
+    ``waist``: the root becomes ``Base`` (at the chest's rest position, fixed to the hips
+    and legs) and a 3-joint waist at Spine2 carries the chest, head, shoulders and arms,
+    so the torso can lean, bend and twist."""
     names = list(rest["names"])
     pos = {n: rest["t_pos"][i] for i, n in enumerate(names)}
     groups = dict(FIXED_GROUPS)
@@ -131,15 +146,32 @@ def build_urdf(rest, out_dir: Path) -> tuple[Path, list[str], dict[str, float]]:
         for b in ("Shoulder", "Arm", "ForeArm", "Hand"):
             origins[f"{s}{b}"] = pos[f"{s}{b}"]
     write_meshes(rest, groups, origins, out_dir / "meshes")
+    if palm_visual:
+        write_meshes(rest, {f"{s}Palm": [f"{s}Hand"] for s in SIDES},
+                     {f"{s}Palm": origins[f"{s}Hand"] for s in SIDES}, out_dir / "meshes")
 
     u = Urdf("soma_arms")
     mesh = lambda link: f"meshes/{link}.obj"  # noqa: E731
-    u.link("Chest", mesh("Chest"))
+    if waist:
+        u.link("Base")
+        u.link("Waist_y")
+        u.link("Waist_p")
+        u.link("Waist_r")
+        u.link("Chest", mesh("Chest"))
+        u.joint("waist_yaw", "Base", "Waist_y", xyz=pos["Spine2"] - origins["Chest"],
+                axis=(0, 0, 1), limit=LIMITS["waist_yaw"])
+        u.joint("waist_pitch", "Waist_y", "Waist_p", axis=(1, 0, 0), limit=LIMITS["waist_pitch"])
+        u.joint("waist_roll", "Waist_p", "Waist_r", axis=(0, 1, 0), limit=LIMITS["waist_roll"])
+        u.joint("Waist_to_Chest", "Waist_r", "Chest", xyz=origins["Chest"] - pos["Spine2"])
+    else:
+        u.link("Chest", mesh("Chest"))
     for link in FIXED_GROUPS:
         if link == "Chest":
             continue
+        # With a waist, the head rides on the chest; belly and legs stay on the base.
+        parent = "Chest" if (not waist or link == "Head") else "Base"
         u.link(link, mesh(link))
-        u.joint(f"Chest_to_{link}", "Chest", link, xyz=origins[link] - origins["Chest"])
+        u.joint(f"{parent}_to_{link}", parent, link, xyz=origins[link] - origins["Chest"])
 
     t_pose = {}
     for s, sign in SIDES.items():
@@ -170,7 +202,9 @@ def build_urdf(rest, out_dir: Path) -> tuple[Path, list[str], dict[str, float]]:
         u.joint(f"{s}_forearm_twist", f"{s}ForeArm_e", f"{s}ForeArm",
                 axis=(sign, 0, 0), limit=LIMITS["forearm_twist"])
         u.link(f"{s}Hand_f")
-        u.link(f"{s}Hand", mesh(f"{s}Hand"))
+        # Only the reaching (right) hand gets drawn fingers; the left keeps its whole hand.
+        u.link(f"{s}Hand", mesh(f"{s}Hand"),
+               visual=mesh(f"{s}Palm") if palm_visual and s == "Right" else None)
         u.joint(f"{s}_wrist_flex", f"{s}ForeArm", f"{s}Hand_f",
                 xyz=origins[f"{s}Hand"] - origins[f"{s}ForeArm"],
                 axis=(0, sign, 0), limit=LIMITS["wrist_flex"])
@@ -203,13 +237,17 @@ def main() -> None:
     here = Path(__file__).parent
     ap.add_argument("--rest", type=Path, default=here / "soma_rest_zup.npz")
     ap.add_argument("--out", type=Path, default=here / "robot")
+    ap.add_argument("--waist", action="store_true",
+                    help="add a 3-joint waist so the torso can lean, bend and twist")
+    ap.add_argument("--palm-visual", action="store_true",
+                    help="hands display only the palm; fingers are drawn by the demo")
     ap.add_argument("--sphere-density", type=float, default=1.0)
     ap.add_argument("--visualize", action="store_true")
     args = ap.parse_args()
 
     rest = np.load(args.rest)
     args.out.mkdir(parents=True, exist_ok=True)
-    urdf, links, t_pose = build_urdf(rest, args.out)
+    urdf, links, t_pose = build_urdf(rest, args.out, palm_visual=args.palm_visual, waist=args.waist)
     print(f"URDF -> {urdf} ({len(links)} collision links)")
 
     from curobo.robot_builder import RobotBuilder
@@ -217,7 +255,8 @@ def main() -> None:
     tool_frames = [f"{s}{b}" for s in SIDES for b in ("Arm", "ForeArm", "Hand")]
     builder = RobotBuilder(urdf_path=str(urdf), asset_path=str(args.out),
                            tool_frames=tool_frames)
-    builder.fit_collision_spheres(sphere_density=args.sphere_density, compute_metrics=True)
+    builder.fit_collision_spheres(sphere_density=args.sphere_density, compute_metrics=True,
+                                  use_collision_mesh=args.palm_visual)
     print(f"{builder.num_spheres} spheres over {len(builder.collision_link_names)} links")
     for link, m in builder.link_metrics.items():
         print(f"  {link:<14s} {m.num_spheres:3d} spheres  cover {m.coverage * 100:5.1f}%"
