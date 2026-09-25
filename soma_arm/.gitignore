@@ -1,2 +1,3 @@
 robot/
 __pycache__/
+!soma_rest_zup.npz

@@ -19,6 +19,9 @@ python build_soma_urdf.py             # -> robot/soma_arms.urdf, robot/soma_arms
 python build_soma_urdf.py --visualize # same, then view the spheres at localhost:8080
 ```
 
+`soma_rest_zup.npz` is checked in so the cuRobo side builds without SOMA-X. It holds
+only native SOMA-X data (Apache-2.0): the neutral body mesh and skeleton from
+`SOMA_neutral.npz` and `SOMA_template_rig.usda`, and each vertex's dominant bone.
 `robot/` is generated and not checked in. It takes about 10 s to rebuild. Sphere fitting
 is not deterministic, so sphere counts vary slightly between builds.
 
