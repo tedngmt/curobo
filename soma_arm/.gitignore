@@ -3,3 +3,4 @@ __pycache__/
 !soma_rest_zup.npz
 .viewer_state.json
 *_human.urdf
+*_wholebody.urdf
